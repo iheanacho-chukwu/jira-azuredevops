@@ -1,0 +1,3 @@
+read:project:jira
+read:project-version:jira
+write:project-version:jira

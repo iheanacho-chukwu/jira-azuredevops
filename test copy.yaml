@@ -8,37 +8,29 @@ variables:
   JIRA_BASE_URL: 'https://nachochukwu.atlassian.net'
   JIRA_PROJECT_KEY: 'DEVOPS'
   JIRA_EMAIL: nacho.chukwu@gmail.com
-  RELEASE_VERSION: "$(Build.BuildNumber)"
-  RELEASE_NOTES: "Azure DevOps Build ID: $(Build.BuildId)"
   JIRA_API_TOKEN: ATATT3xFfGF0De0og-LZJj6NrDOH_iXB7eOpA6i802l-J6YfzhNGd7ut7Hi3Cm6MiuXefOpEmwGsZX6HBx2SmEkYG0b2zHIR89JokiQBhUDmf88MmQOTPHCyyzW3xV3MjhysTnRxl7MNjD8pVxcjHTAcWH5jwS5zwNLJsZmC376a7FksDzR3Pjc=05AC427A
-
-
+  RELEASE_VERSION: "$(Build.BuildNumber)"
+  
 stages:
 
 - stage: Deploy
   displayName: Deploy Application
-
   jobs:
-
   - job: DeployJob
     displayName: Deploy
 
     steps:
 
-    # Your deployment step
     - script: |
         echo "Deploying application..."
-        # Add your deployment commands here
-      displayName: Deploy Application
+        # Your deployment commands go here
+      displayName: Deploy
 
 
-    # Create Jira Release
     - bash: |
-
         echo "Creating Jira release..."
 
         echo "Release version: $RELEASE_VERSION"
-        echo "Release notes: $RELEASE_NOTES"
 
         RESPONSE=$(curl -s \
           -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
@@ -48,26 +40,16 @@ stages:
           -d "{
             \"project\":\"$JIRA_PROJECT_KEY\",
             \"name\":\"$RELEASE_VERSION\",
-            \"description\":\"$RELEASE_NOTES\",
             \"released\":false
           }")
 
         echo "Jira response:"
         echo "$RESPONSE"
 
-
         VERSION_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
 
-        if [ -z "$VERSION_ID" ]; then
-          echo "Failed to create Jira release"
-          exit 1
-        fi
+        echo "Version ID: $VERSION_ID"
 
-
-        echo "Created Jira Version ID: $VERSION_ID"
-
-
-        # Mark release as completed
         curl -s \
           -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
           -X PUT \
@@ -78,11 +60,6 @@ stages:
             \"releaseDate\":\"$(date +%F)\"
           }"
 
-
         echo "Jira release completed: $RELEASE_VERSION"
 
-
       displayName: Create and Release Jira Version
-
-      env:
-        JIRA_API_TOKEN: $(JIRA_API_TOKEN)
