@@ -1,0 +1,65 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  JIRA_BASE_URL: 'https://nachochukwu.atlassian.net'
+  JIRA_PROJECT_KEY: 'DEVOPS'
+  JIRA_EMAIL: nacho.chukwu@gmail.com
+  JIRA_API_TOKEN: ATATT3xFfGF0De0og-LZJj6NrDOH_iXB7eOpA6i802l-J6YfzhNGd7ut7Hi3Cm6MiuXefOpEmwGsZX6HBx2SmEkYG0b2zHIR89JokiQBhUDmf88MmQOTPHCyyzW3xV3MjhysTnRxl7MNjD8pVxcjHTAcWH5jwS5zwNLJsZmC376a7FksDzR3Pjc=05AC427A
+  VERSION_NAME: "$(Build.BuildNumber)"
+  
+stages:
+
+- stage: Deploy
+  displayName: Deploy Application
+  jobs:
+  - job: DeployJob
+    displayName: Deploy
+
+    steps:
+
+    - script: |
+        echo "Deploying application..."
+        # Your deployment commands go here
+      displayName: Deploy
+
+
+    - bash: |
+        echo "Creating Jira release..."
+
+        echo "Release version: $VERSION_NAME"
+
+        RESPONSE=$(curl -s \
+          -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+          -X POST \
+          -H "Content-Type: application/json" \
+          "$JIRA_BASE_URL/rest/api/3/version" \
+          -d "{
+            \"project\":\"$JIRA_PROJECT_KEY\",
+            \"name\":\"$VERSION_NAME\",
+            \"released\":false
+          }")
+
+        echo "Jira response:"
+        echo "$RESPONSE"
+
+        VERSION_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+        echo "Version ID: $VERSION_ID"
+
+        curl -s \
+          -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
+          -X PUT \
+          -H "Content-Type: application/json" \
+          "$JIRA_BASE_URL/rest/api/3/version/$VERSION_ID" \
+          -d "{
+            \"released\":true,
+            \"releaseDate\":\"$(date +%F)\"
+          }"
+
+        echo "Jira release completed: $VERSION_NAME"
+
+      displayName: Create and Release Jira Version

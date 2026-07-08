@@ -1,0 +1,58 @@
+trigger: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  JIRA_BASE_URL: 'https://nachochukwu.atlassian.net'
+  JIRA_PROJECT_KEY: 'DEVOPS'
+  JIRA_VERSION_NAME: '$(Build.BuildNumber)'
+  JIRA_EMAIL: nacho.chukwu@gmail.com
+  JIRA_API_TOKEN: ATATT3xFfGF0De0og-LZJj6NrDOH_iXB7eOpA6i802l-J6YfzhNGd7ut7Hi3Cm6MiuXefOpEmwGsZX6HBx2SmEkYG0b2zHIR89JokiQBhUDmf88MmQOTPHCyyzW3xV3MjhysTnRxl7MNjD8pVxcjHTAcWH5jwS5zwNLJsZmC376a7FksDzR3Pjc=05AC427A
+
+stages:
+- stage: Deploy_Production
+  jobs:
+  - job: DeployAndRelease
+    steps:
+    - script: echo "Deployed to production"
+
+    - bash: |
+        set -e
+
+        AUTH=$(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)
+        TODAY=$(date +%F)
+
+        VERSION_ID=$(curl -s \
+          -H "Authorization: Basic $AUTH" \
+          -H "Accept: application/json" \
+          "$JIRA_BASE_URL/rest/api/3/project/$JIRA_PROJECT_KEY/versions" \
+          | jq -r ".[] | select(.name==\"$JIRA_VERSION_NAME\") | .id" | head -n 1)
+
+        if [ -z "$VERSION_ID" ]; then
+          VERSION_ID=$(curl -s -X POST \
+            -H "Authorization: Basic $AUTH" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            "$JIRA_BASE_URL/rest/api/3/version" \
+            --data "{
+              \"project\": \"$JIRA_PROJECT_KEY\",
+              \"name\": \"$JIRA_VERSION_NAME\",
+              \"released\": false
+            }" | jq -r '.id')
+        fi
+
+        curl -s -X PUT \
+          -H "Authorization: Basic $AUTH" \
+          -H "Accept: application/json" \
+          -H "Content-Type: application/json" \
+          "$JIRA_BASE_URL/rest/api/3/version/$VERSION_ID" \
+          --data "{
+            \"released\": true,
+            \"releaseDate\": \"$TODAY\"
+          }"
+
+        echo "Jira version released: $JIRA_VERSION_NAME"
+      env:
+        JIRA_EMAIL: $(JIRA_EMAIL)
+        JIRA_API_TOKEN: $(JIRA_API_TOKEN)

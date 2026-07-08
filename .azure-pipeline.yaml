@@ -1,0 +1,108 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  appName: hello-world-app
+  environmentName: production
+  JIRA_BASE_URL = https://your-domain.atlassian.net
+  JIRA_EMAIL = your-email
+  JIRA_API_TOKEN = secret
+  JIRA_PROJECT_KEY = APP
+  JIRA_VERSION_NAME = hello-world-v1.0.0
+  JIRA_ISSUE_KEYS = APP-123
+
+stages:
+- stage: Build
+  jobs:
+  - job: HelloWorldBuild
+    steps:
+    - script: |
+        echo "Hello World build"
+        echo "Application: $(appName)"
+        echo "Version: $(JIRA_VERSION_NAME)"
+      displayName: "Hello World Build"
+
+- stage: Deploy_Production
+  dependsOn: Build
+  jobs:
+  - job: HelloWorldDeploy
+    steps:
+    - script: |
+        echo "Hello World deployment to production"
+        echo "Deployment completed successfully"
+      displayName: "Fake Production Deployment"
+
+- stage: Update_Jira
+  dependsOn: Deploy_Production
+  condition: succeeded()
+  jobs:
+  - job: UpdateJiraRelease
+    steps:
+    - bash: |
+        set -e
+
+        AUTH="$(echo -n "$(JIRA_EMAIL):$(JIRA_API_TOKEN)" | base64)"
+        TODAY="$(date +%F)"
+
+        echo "Checking if Jira version exists..."
+
+        VERSION_ID=$(curl -s \
+          -H "Authorization: Basic $AUTH" \
+          -H "Accept: application/json" \
+          "$(JIRA_BASE_URL)/rest/api/3/project/$(JIRA_PROJECT_KEY)/versions" \
+          | jq -r '.[] | select(.name=="$(JIRA_VERSION_NAME)") | .id' | head -n 1)
+
+        if [ -z "$VERSION_ID" ]; then
+          echo "Creating Jira version..."
+
+          VERSION_ID=$(curl -s -X POST \
+            -H "Authorization: Basic $AUTH" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            "$(JIRA_BASE_URL)/rest/api/3/version" \
+            --data "{
+              \"name\": \"$(JIRA_VERSION_NAME)\",
+              \"project\": \"$(JIRA_PROJECT_KEY)\",
+              \"description\": \"Auto-created from Azure DevOps pipeline $(Build.BuildNumber)\",
+              \"released\": false
+            }" | jq -r '.id')
+        fi
+
+        echo "Jira Version ID: $VERSION_ID"
+
+        echo "Adding Fix Version to Jira issue(s)..."
+
+        for ISSUE in $(echo "$(JIRA_ISSUE_KEYS)" | tr ',' ' '); do
+          curl -s -X PUT \
+            -H "Authorization: Basic $AUTH" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            "$(JIRA_BASE_URL)/rest/api/3/issue/$ISSUE" \
+            --data "{
+              \"update\": {
+                \"fixVersions\": [
+                  { \"add\": { \"id\": \"$VERSION_ID\" } }
+                ]
+              }
+            }"
+
+          echo "Updated $ISSUE with Fix Version $(JIRA_VERSION_NAME)"
+        done
+
+        echo "Marking Jira version as Released..."
+
+        curl -s -X PUT \
+          -H "Authorization: Basic $AUTH" \
+          -H "Accept: application/json" \
+          -H "Content-Type: application/json" \
+          "$(JIRA_BASE_URL)/rest/api/3/version/$VERSION_ID" \
+          --data "{
+            \"released\": true,
+            \"releaseDate\": \"$TODAY\"
+          }"
+
+        echo "Jira release completed successfully."
+      displayName: "Create and Complete Jira Release"
