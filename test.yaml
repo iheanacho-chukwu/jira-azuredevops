@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  vmImage: ubuntu-latest
+  name: selfhosted-linux-agent-pool
 
 variables:
   JIRA_BASE_URL: 'https://nachochukwu.atlassian.net'
