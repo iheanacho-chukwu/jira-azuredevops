@@ -2,7 +2,7 @@ trigger:
 - main
 
 pool:
-  name: selfhosted-linux-agent-pool
+  name: linux-agent-pool
 
 variables:
   JIRA_BASE_URL: 'https://nachochukwu.atlassian.net'
